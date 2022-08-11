@@ -31,17 +31,41 @@ const userSchema = new mongoose.Schema({
       },
       message: "Passwords do not match.",
     },
+    select: false
   },
 });
-// Encriptar contrasena
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
 
-  this.password = await bcrypt.hash(this.password, 12); // default 12
+// Usamos pre para manejar la data antes de que entre a la base de datos.
+userSchema.pre('save', async function(next) {
+  // Solo se corre esta funcion si las contrasenas se modifican
+  if (!this.isModified('password')) return next();
 
-  this.confirmPwd = undefined;
+  // Hacer un hash al password con un cost de 12.
+  this.password = await bcrypt.hash(this.password, 12); //12 refers to the number of years. CPU intensive
+  //hash -> encryption
+  this.passwordConfirm = undefined; // PAra validarlo, y antes de darle save, que se elimine, para que no se vea la otra contra.
+  next();
+})
+
+userSchema.pre('save', function(next) {
+  if (!this.isModified('password') || this.isNew) return next();
+
+  this.passwordChangedAt = Date.now() - 1000;
   next();
 });
+
+userSchema.pre(/^find/, function(next) {
+  // this points to the current query
+  this.find({active: { $ne: false }})
+  next();
+})
+
+// Instance method
+userSchema.methods.correctPassword = async function(candidatePassword, userPassword) {
+  // this.password // will not be available
+  return await bcrypt.compare(candidatePassword, userPassword);
+}
+
 // Creamos un modelo y luego lo exportamos para que pueda ser llamado a otros archivos.
 const User = mongoose.model("User", userSchema);
 module.exports = User;
